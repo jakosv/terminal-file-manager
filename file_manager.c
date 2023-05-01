@@ -2,40 +2,39 @@
 #include "directory.h"
 #include "list_of_files.h"
 #include "fm_view.h"
+#include "config.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-static const char trash_path[] = "trash/";
+enum { key_space = ' ' };
+
+static const char delete_file_alert[] = "Delete this file? (y/n)";
 
 static void fm_open_dir(struct file_manager *fm, const char *dir_path)
 {
     fm->dirp = opendir(dir_path); 
     if (!fm->dirp) {
+        view_show_message(&fm->view, dir_path);
         perror(dir_path);
         exit(1);
     }
     chdir(dir_path);
-    get_dir_data(fm->dirp, &fm->files);
 }
 
 void fm_init(struct file_manager *fm, const char *dir_path)
 {
     fm_open_dir(fm, dir_path);
+    get_dir_data(fm->dirp, &fm->files);
     view_init(&fm->view, fm->files.first);
-}
-
-static void fm_close_dir(struct file_manager *fm)
-{
-    lof_free(&fm->files);
-    closedir(fm->dirp);
 }
 
 void fm_close(struct file_manager *fm)
 {
-    view_close();
-    fm_close_dir(fm);
+    view_close(&fm->view);
+    lof_free(&fm->files);
+    closedir(fm->dirp);
 }
 
 static void move_file_to_trash(const char *file_name)
@@ -80,13 +79,24 @@ static void delete_file(struct file_manager *fm, struct lof_item *file)
     fm->view.selected = selected;
 }
 
-static void change_dir(struct file_manager *fm, const char *dir_path)
+static void open_selected_dir(struct file_manager *fm)
 {
     if (fm->view.selected->data.type != ft_dir)
         return;
-    fm_close_dir(fm);
-    fm_open_dir(fm, dir_path);
+    closedir(fm->dirp);
+    fm_open_dir(fm, fm->view.selected->data.name);
+    lof_free(&fm->files);
+    get_dir_data(fm->dirp, &fm->files);
     view_update(&fm->view, fm->files.first);
+}
+
+static void handle_delete_key(struct file_manager *fm)
+{
+    int key;
+    view_show_message(&fm->view, delete_file_alert);
+    key = getch();
+    if (key == 'y')
+        delete_file(fm, fm->view.selected);
 }
 
 void fm_start(struct file_manager *fm)
@@ -96,17 +106,29 @@ void fm_start(struct file_manager *fm)
     while ((key = getch()) != 'q') {
         switch(key) {
         case KEY_UP:
+        case 'k':
             view_select_prev(&fm->view);
             break;
         case KEY_DOWN:
+        case 'j':
             view_select_next(&fm->view);
             break;
         case 'd':
-            delete_file(fm, fm->view.selected);
+            handle_delete_key(fm);
             break;
         case KEY_ENTER:
         case 10:
-            change_dir(fm, fm->view.selected->data.name);
+        case key_space:
+            open_selected_dir(fm);
+            break;
+        case 'n':
+            view_page_down(&fm->view);
+            break;
+        case 'p':
+            view_page_up(&fm->view);
+            break;
+        case KEY_RESIZE:
+            view_resize(&fm->view);
             break;
         }
         view_draw(&fm->view);

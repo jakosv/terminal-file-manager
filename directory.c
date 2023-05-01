@@ -14,6 +14,8 @@ void get_dir_data(DIR *dirp, struct list_of_files *lst)
     lof_init(lst);
     while ((dir_rec = readdir(dirp)) != NULL) {
         struct file_info file;
+        if (strcmp(dir_rec->d_name, ".") == 0)
+            continue;
         get_file_info(dir_rec->d_name, &file);
         lof_add(lst, &file);
     } 

@@ -7,10 +7,6 @@
 #include <sys/stat.h>
 #include <sys/unistd.h>
 
-const char *file_type_str[ft_count] = {
-    "file", "directory", "symlink", "undefined"
-};
-
 static enum file_type get_file_type(int mode)
 {
     enum file_type type;

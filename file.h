@@ -7,8 +7,6 @@
 enum { max_name_len = 254 };
 enum file_type { ft_file, ft_dir, ft_slink, ft_undef, ft_count };
 
-extern const char *file_type_str[ft_count];
-
 struct file_info {
     int uid;
     char name[max_name_len+1];
