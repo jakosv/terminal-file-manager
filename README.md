@@ -16,5 +16,7 @@ $ ./file-manager
 | <kbd>&#8593;</kbd>,<kbd>k</kbd> | Select previous file |
 | <kbd>Space</kbd>,<kbd>Enter</kbd> | Open directory |
 | <kbd>d</kbd> | Delete file (confirmation is required by pressing <kbd>y</kbd>) |
+| <kbd>p</kbd>                                      | Page Up               |
+| <kbd>n</kbd>                                      | Page Down               |
 | <kbd>q</kbd>                                      | Quit               |
 
