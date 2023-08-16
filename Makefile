@@ -9,7 +9,7 @@ OBJMODULES = file_manager.o fm_view.o file.o directory.o list_of_files.o
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(PROG): main.c $(OBJMODULES)
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 clean:
 	rm *.o $(PROG)

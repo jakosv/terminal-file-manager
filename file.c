@@ -5,25 +5,20 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/unistd.h>
+#include <unistd.h>
 
 static enum file_type get_file_type(int mode)
 {
-    enum file_type type;
-    switch (mode & S_IFMT) {
-    case S_IFREG:
-        type = ft_file;
-        break;
-    case S_IFDIR:
-        type = ft_dir;
-        break;
-    case S_IFLNK:
-        type = ft_slink;
-        break;
-    default:
-        type = ft_undef;
-    }
-    return type;
+    if (S_ISREG(mode))
+        return ft_file;
+
+    if (S_ISDIR(mode))
+        return ft_dir;
+
+    if (S_ISLNK(mode))
+        return ft_slink;
+
+    return ft_undef;
 }
 
 void get_file_info(const char *file_name, struct file_info *info)
