@@ -1,12 +1,13 @@
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/errno.h>
+
 #include "file_manager.h"
 #include "directory.h"
 #include "list_of_files.h"
 #include "fm_view.h"
 #include "config.h"
-
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 
 enum { key_space = ' ' };
 
@@ -79,15 +80,84 @@ static void delete_file(struct file_manager *fm, struct lof_item *file)
     fm->view.selected = selected;
 }
 
-static void open_selected_dir(struct file_manager *fm)
+static void open_selected_dir(struct lof_item *selection,
+                              struct file_manager *fm)
 {
     if (fm->view.selected->data.type != ft_dir)
         return;
     closedir(fm->dirp);
-    fm_open_dir(fm, fm->view.selected->data.name);
+    fm_open_dir(fm, selection->data.name);
     lof_free(&fm->files);
     get_dir_data(fm->dirp, &fm->files);
     view_update(&fm->view, fm->files.first);
+}
+
+static void open_selected_file(struct lof_item *selection, 
+                               struct file_manager *fm)
+{
+    int pid, i;
+    char *name;
+    name = view_get_input(&fm->view, "Open file with");
+    if (!name || name[0] == ' ')
+        return;
+    for (i = 0; i < strlen(name); i++)
+        if (name[i] == ' ') {
+            name[i] = '\0';
+            break;
+        }
+    endwin();
+    pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        exit(1);
+    } else
+    if (pid == 0) {
+        execlp(name, name, selection->data.name, NULL);
+        perror(name);
+        /*
+        view_show_message(&fm->view, strerror(errno));
+        key = getch();
+        */
+        exit(1);
+    } 
+    wait(NULL);
+    free(name);
+}
+
+static void exec_selected_file(struct lof_item *selection, 
+                               struct file_manager *fm)
+{
+    int pid, key;
+    pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        exit(1);
+    } else
+    if (pid == 0) {
+        execl(selection->data.name, selection->data.name, NULL);
+        view_show_message(&fm->view, strerror(errno));
+        key = getch();
+        exit(1);
+    } 
+    wait(NULL);
+}
+
+static void handle_selected_file(struct lof_item *selection, 
+                                 struct file_manager *fm)
+{
+    enum file_type type;
+    type = selection->data.type;
+    switch (type) {
+        case ft_dir:
+            open_selected_dir(selection, fm);
+            break;
+        case ft_exec:
+            exec_selected_file(selection, fm);
+            break;
+        case ft_file:
+        default:
+            open_selected_file(selection, fm);
+    }
 }
 
 static void handle_delete_key(struct file_manager *fm)
@@ -119,7 +189,7 @@ void fm_start(struct file_manager *fm)
         case KEY_ENTER:
         case 10:
         case key_space:
-            open_selected_dir(fm);
+            handle_selected_file(fm->view.selected, fm);
             break;
         case 'n':
             view_page_down(&fm->view);
@@ -130,6 +200,8 @@ void fm_start(struct file_manager *fm)
         case KEY_RESIZE:
             view_resize(&fm->view);
             break;
+        default:
+            continue;
         }
         view_draw(&fm->view);
     }

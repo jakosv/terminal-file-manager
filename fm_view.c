@@ -1,12 +1,16 @@
-#include "fm_view.h"
-#include "file.h"
-
 #include <time.h>
 #include <string.h>
 #include <stdlib.h>
+#include <locale.h>
+#include <ncurses.h>
+#include <form.h>
+
+#include "fm_view.h"
+#include "file.h"
 
 enum { reserved_rows = 4, header_height = 3 };
-enum { fsize_width = 8, ftime_width = 17, separator_width = 3 };
+enum { fsize_width = 8, ftime_width = 17 };
+enum { key_escape = 27 };
 static const char fname_col[] = "Name";
 static const char fsize_col[] = "Size";
 static const char ftime_col[] = "Modify time";
@@ -41,6 +45,7 @@ static struct lof_item *get_view_first_item(struct fm_view *view,
 
 void view_init(struct fm_view *view, struct lof_item *first)
 {
+    setlocale(LC_ALL, "");
     initscr();
     getmaxyx(stdscr, view->rows, view->cols);
     cbreak();
@@ -56,7 +61,7 @@ void view_init(struct fm_view *view, struct lof_item *first)
 
 void view_update(struct fm_view *view, struct lof_item *first)
 {
-    wclear(view->win);
+    /* wclear(view->win); */
     view->first = first;
     view->selected = first;
     view->last = get_view_last_item(view, first);
@@ -68,48 +73,88 @@ void view_close(struct fm_view *view)
     endwin();
 }
 
-static void form_file_name(char *new_name, const char *name, 
-                             enum file_type ftype, int fname_width)
+static char *form_file_name(const char *name, enum file_type ftype,
+                            int max_len)
 {
-    int max_len;
-    max_len = fname_width;
+    int pos;
+    char *new_name;
+    new_name = malloc(max_len+1);
+    pos = 0;
     if (ftype == ft_dir) {
         new_name[0] = '/';
-        new_name++;
-        max_len--;
+        pos++;
+    } else
+    if (ftype == ft_exec) {
+        new_name[0] = '>';
+        pos++;
     }
-    strncpy(new_name, name, max_len);
+    strncpy(new_name + pos, name, max_len - pos);
     if (new_name[max_len-1] != 0) {
         int i;
         for (i = 3; i > 0; i--)
             new_name[max_len - i] = '.';
     }
     new_name[max_len] = '\0';
+    return new_name;
 }
 
-static void form_time_str(char *str, time_t ftime)
+static char *form_time_str(time_t ftime)
 {
     struct tm *ltime;
+    char *str;
+    str = malloc(ftime_width+1);
     ltime = localtime(&ftime);
     strftime(str, ftime_width, "%b %d %H:%M %Y", ltime);
     str[ftime_width] = '\0';
+    return str;
+}
+
+static int get_file_info_max_width(int win_width)
+{
+    return fsize_width + ftime_width + 5;
+}
+
+static int get_file_name_max_width(int win_width)
+{
+    return win_width-2 - get_file_info_max_width(win_width);
+}
+
+static void draw_item_str(WINDOW *win, 
+                          int row, int win_width, int is_selected,
+                          const char *name_str, const char *size_str,
+                          const char *time_str)
+{
+    int finfo_x;
+
+    finfo_x = win_width-1 - get_file_info_max_width(win_width);
+    
+    if (is_selected)
+        wattron(win, A_BOLD|A_UNDERLINE);
+    mvwprintw(win, row, 1, "%s", name_str);
+    mvwprintw(win, row, finfo_x, "| %*s | %*s", 
+              fsize_width, size_str, ftime_width, time_str);
+    if (is_selected)
+        wattroff(win, A_BOLD|A_UNDERLINE);
 }
 
 static void draw_item(WINDOW *win, struct lof_item *cur, int row, 
-                      int fname_width, int selected)
+                      int max_width, int selected)
 {
+    int fname_width;
+    char *file_name;
     char size_str[fsize_width + 1];
-    char file_name[max_name_len];
-    char time_str[ftime_width + 1];
+    char *time_str;
+
+    fname_width = get_file_name_max_width(max_width);
+
     file_size_str(cur->data.size, size_str, fsize_width+1);
-    form_file_name(file_name, cur->data.name, cur->data.type, fname_width);
-    form_time_str(time_str, cur->data.mtime);
-    if (selected)
-        wattron(win, A_BOLD|A_UNDERLINE);
-    mvwprintw(win, row, 1, "%-*s | %*s | %*s", fname_width, file_name,
-             fsize_width, size_str, ftime_width, time_str);
-    if (selected)
-        wattroff(win, A_BOLD|A_UNDERLINE);
+    file_name = form_file_name(cur->data.name, cur->data.type, fname_width);
+    time_str = form_time_str(cur->data.mtime);
+
+    draw_item_str(win, row, max_width, selected, 
+                  file_name, size_str, time_str); 
+    free(file_name);
+    free(time_str);
 }
 
 static void copy_str_to_buf_center(char *buf, int buf_size, const char *str)
@@ -123,33 +168,35 @@ static void copy_str_to_buf_center(char *buf, int buf_size, const char *str)
     buf[center + str_size] = '\0';
 }
 
-static void draw_header(WINDOW *win, int row, int fname_width)
+static void draw_header(WINDOW *win, int row, int max_width)
 {
+    int fname_width;
     char *name_str;
     char size_str[fsize_width + 1];
     char time_str[ftime_width + 1];
+
+    fname_width = get_file_name_max_width(max_width);
     name_str = malloc(fname_width + 1);
+
     copy_str_to_buf_center(name_str, fname_width, fname_col);
     copy_str_to_buf_center(size_str, fsize_width, fsize_col);
     copy_str_to_buf_center(time_str, ftime_width, ftime_col);
-    mvwhline(win, row + 1, 1, 0, 
-            fname_width + fsize_width + ftime_width + 2*separator_width); 
-    mvwprintw(win, row, 1, "%-*s | %-*s | %-*s", fname_width, name_str, 
-             fsize_width, size_str, ftime_width, time_str);
+    draw_item_str(win, row, max_width, 0,
+                  name_str, size_str, time_str);
+    mvwhline(win, row+1, 1, 0, max_width-2);
     free(name_str);
 }
 
 void view_draw(const struct fm_view *view)
 {
     struct lof_item *tmp;
-    int row, fname_width;
-    fname_width = 
-        view->cols - 2 - fsize_width - ftime_width - 2*separator_width;
+    int row;
+    wclear(view->win);
     box(view->win, 0, 0);
-    draw_header(view->win, 1, fname_width);
+    draw_header(view->win, 1, view->cols);
     row = header_height;
     for (tmp = view->first; tmp != view->last->next; tmp = tmp->next, row++)
-        draw_item(view->win, tmp, row, fname_width, tmp == view->selected);
+        draw_item(view->win, tmp, row, view->cols, tmp == view->selected);
     wrefresh(view->win);
 }
 
@@ -168,6 +215,82 @@ void view_show_message(const struct fm_view *view, const char *msg)
     mvwprintw(msg_win, 1, 1, "%s", msg);
     wrefresh(msg_win);
     delwin(msg_win);
+}
+
+static void print_in_middle(WINDOW *win, int starty, int startx, int width,
+                            const char *str)
+{
+    int len, x;
+
+    if (win == NULL)
+        win = stdscr;
+
+    len = strlen(str);
+    x = startx + (width - len) / 2;
+    mvwprintw(win, starty, x, "%s", str);
+    refresh();
+}
+
+char *view_get_input(const struct fm_view *view, const char *msg)
+{
+    FIELD *field[2];
+    FORM *input_form;
+    WINDOW *input_win;
+    int ch, win_x, win_y, win_height, win_width, msg_len;
+    char *answer, *buf;
+
+    answer = NULL;
+    msg_len = strlen(msg);
+    field[0] = new_field(1, msg_len, 1, 1, 0, 0);
+    field[1] = NULL;
+
+    set_field_back(field[0], A_UNDERLINE);
+    field_opts_off(field[0], O_AUTOSKIP);
+
+    input_form = new_form(field);
+    scale_form(input_form, &win_height, &win_width); 
+
+    win_x = (view->cols - (win_width+5)) / 2;
+    win_y = (view->rows - (win_height+5)) / 2;
+    input_win = newwin(win_height+5, win_width+5, win_y, win_x);
+    keypad(input_win, 1);
+    
+    set_form_win(input_form, input_win);
+    set_form_sub(input_form, derwin(input_win, win_height, win_width, 2, 2));
+    box(input_win, 0, 0);
+
+    print_in_middle(input_win, 1, 0, win_width+5, msg);
+    post_form(input_form);
+    wrefresh(input_win);
+    refresh();
+
+    form_driver(input_form, REQ_FIRST_FIELD);
+
+    while ((ch = wgetch(input_win)) != key_escape) {
+        switch (ch) {
+        case KEY_ENTER:
+        case 10:
+            form_driver(input_form, REQ_VALIDATION);
+            buf = field_buffer(field[0], 0);
+            answer = malloc(strlen(buf)+1);
+            strcpy(answer, buf);
+            goto quit;
+        case KEY_BACKSPACE:
+        case 127:
+            form_driver(input_form, REQ_DEL_PREV);
+            break;
+        default:
+            form_driver(input_form, ch);
+            break;
+        }
+    }
+
+quit:
+    unpost_form(input_form);
+    free_form(input_form);
+    free_field(field[0]);
+
+    return answer;
 }
 
 void view_resize(struct fm_view *view)

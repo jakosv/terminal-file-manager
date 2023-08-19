@@ -5,7 +5,7 @@
 #include <sys/stat.h>
 
 enum { max_name_len = 254 };
-enum file_type { ft_file, ft_dir, ft_slink, ft_undef, ft_count };
+enum file_type { ft_file, ft_dir, ft_slink, ft_exec, ft_undef, ft_count };
 
 struct file_info {
     int uid;

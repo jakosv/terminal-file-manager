@@ -9,8 +9,11 @@
 
 static enum file_type get_file_type(int mode)
 {
-    if (S_ISREG(mode))
+    if (S_ISREG(mode)) {
+        if (S_IXUSR & mode)
+            return ft_exec;
         return ft_file;
+    }
 
     if (S_ISDIR(mode))
         return ft_dir;
