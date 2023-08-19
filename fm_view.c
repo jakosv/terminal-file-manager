@@ -9,7 +9,7 @@
 #include "file.h"
 
 enum { reserved_rows = 4, header_height = 3 };
-enum { fsize_width = 8, ftime_width = 17 };
+enum { fsize_width = 8, ftime_width = 18 };
 enum { key_escape = 27 };
 static const char fname_col[] = "Name";
 static const char fsize_col[] = "Size";
@@ -61,7 +61,7 @@ void view_init(struct fm_view *view, struct lof_item *first)
 
 void view_update(struct fm_view *view, struct lof_item *first)
 {
-    /* wclear(view->win); */
+    wclear(view->win);
     view->first = first;
     view->selected = first;
     view->last = get_view_last_item(view, first);
@@ -124,14 +124,17 @@ static void draw_item_str(WINDOW *win,
                           const char *name_str, const char *size_str,
                           const char *time_str)
 {
-    int finfo_x;
+    int finfo_x, x, y;
 
     finfo_x = win_width-1 - get_file_info_max_width(win_width);
     
     if (is_selected)
         wattron(win, A_BOLD|A_UNDERLINE);
     mvwprintw(win, row, 1, "%s", name_str);
-    mvwprintw(win, row, finfo_x, "| %*s | %*s", 
+    getyx(win, y, x);
+    for (; x < finfo_x; x++)
+        waddch(win, ' ');
+    mvwprintw(win, row, finfo_x, "| %*s | %-*s", 
               fsize_width, size_str, ftime_width, time_str);
     if (is_selected)
         wattroff(win, A_BOLD|A_UNDERLINE);
@@ -191,7 +194,9 @@ void view_draw(const struct fm_view *view)
 {
     struct lof_item *tmp;
     int row;
+    /*
     wclear(view->win);
+    */
     box(view->win, 0, 0);
     draw_header(view->win, 1, view->cols);
     row = header_height;

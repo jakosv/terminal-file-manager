@@ -89,7 +89,6 @@ static void open_selected_dir(struct lof_item *selection,
     fm_open_dir(fm, selection->data.name);
     lof_free(&fm->files);
     get_dir_data(fm->dirp, &fm->files);
-    view_update(&fm->view, fm->files.first);
 }
 
 static void open_selected_file(struct lof_item *selection, 
@@ -128,6 +127,7 @@ static void exec_selected_file(struct lof_item *selection,
                                struct file_manager *fm)
 {
     int pid, key;
+    endwin();
     pid = fork();
     if (pid == -1) {
         perror("fork");
@@ -158,6 +158,7 @@ static void handle_selected_file(struct lof_item *selection,
         default:
             open_selected_file(selection, fm);
     }
+    view_update(&fm->view, fm->files.first);
 }
 
 static void handle_delete_key(struct file_manager *fm)
