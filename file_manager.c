@@ -92,19 +92,34 @@ static void open_selected_dir(struct lof_item *selection,
     get_dir_data(fm->dirp, &fm->files);
 }
 
-static void open_selected_file(struct lof_item *selection, 
-                               struct file_manager *fm)
+static void wait_ignoring_interrupts(int *stat_loc)
 {
-    int pid, i;
-    char *name;
-    name = view_get_input(&fm->view, "Open file with");
-    if (!name || name[0] == ' ')
-        return;
-    for (i = 0; i < strlen(name); i++)
-        if (name[i] == ' ') {
-            name[i] = '\0';
+    for (;;) {
+        int wait_res;
+        wait_res = wait(NULL);
+        if (wait_res == -1 && errno != EINTR)
             break;
-        }
+    }
+}
+
+static void str_trim(char *s)
+{
+    char *p;
+    /* skip spaces at the begginig */
+    for (p = s; *p && *p == ' '; p++)
+        {}
+    /* copy sting to the beggining */
+    for (; *p && *p != ' '; p++) {
+        *s = *p;
+        s++;
+    }
+    *s = '\0';
+}
+
+static void run_program(const char *name, char* const *args)
+{
+    int pid;
+
     endwin();
     pid = fork();
     if (pid == -1) {
@@ -112,7 +127,7 @@ static void open_selected_file(struct lof_item *selection,
         exit(1);
     } else
     if (pid == 0) {
-        execlp(name, name, selection->data.name, NULL);
+        execvp(name, args);
         perror(name);
         /*
         view_show_message(&fm->view, strerror(errno));
@@ -120,39 +135,44 @@ static void open_selected_file(struct lof_item *selection,
         */
         exit(1);
     } 
-    for (;;) {
-        int wait_res;
-        wait_res = wait(NULL);
-        if (wait_res == -1 && errno != EINTR)
-            break;
-    }
-    free(name);
+    wait_ignoring_interrupts(NULL);
+}
+
+static void open_selected_file(struct lof_item *selection, 
+                               struct file_manager *fm)
+{
+    char *prog_name;
+    char *args[3];
+
+    prog_name = view_get_input(&fm->view, "Open file with");
+    if (!prog_name)
+        return;
+    str_trim(prog_name);
+
+    args[0] = prog_name;
+    args[1] = selection->data.name;
+    args[2] = NULL;
+    run_program(prog_name, args);
+
+    free(prog_name);
 }
 
 static void exec_selected_file(struct lof_item *selection, 
                                struct file_manager *fm)
 {
-    int pid;
-    endwin();
-    pid = fork();
-    if (pid == -1) {
-        perror("fork");
-        exit(1);
-    } else
-    if (pid == 0) {
-        execl(selection->data.name, selection->data.name, NULL);
-        /*
-        view_show_message(&fm->view, strerror(errno));
-        key = getch();
-        */
-        exit(1);
-    } 
-    for (;;) {
-        int wait_res;
-        wait_res = wait(NULL);
-        if (wait_res == -1 && errno != EINTR)
-            break;
-    }
+    char *prog_name;
+    char *args[2];
+
+    prog_name = malloc(sizeof(selection->data.name)+3);
+    strcpy(prog_name+2, selection->data.name);
+    prog_name[0] = '.';
+    prog_name[1] = '/';
+
+    args[0] = prog_name;
+    args[1] = NULL;
+    run_program(prog_name, args);
+
+    free(prog_name);
 }
 
 static void handle_selected_file(struct lof_item *selection, 
