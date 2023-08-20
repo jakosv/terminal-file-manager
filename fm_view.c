@@ -59,12 +59,26 @@ void view_init(struct fm_view *view, struct lof_item *first)
     refresh();
 }
 
+static int is_selected_in_range(const struct lof_item *selected,
+                                const struct lof_item *first, 
+                                const struct lof_item *last)
+{
+    struct lof_item *tmp;
+    if (!selected)
+        return 0;
+    for (tmp = first; tmp != last; tmp = tmp->next)
+        if (tmp == selected)
+            return 1;
+    return 0;
+}
+
 void view_update(struct fm_view *view, struct lof_item *first)
 {
     wclear(view->win);
     view->first = first;
-    view->selected = first;
     view->last = get_view_last_item(view, first);
+    if (!is_selected_in_range(view->selected, view->first, view->last))
+        view->selected = first;
 }
 
 void view_close(struct fm_view *view)
