@@ -2,6 +2,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/errno.h>
+#include <sys/wait.h>
 
 #include "file_manager.h"
 #include "directory.h"
@@ -119,14 +120,19 @@ static void open_selected_file(struct lof_item *selection,
         */
         exit(1);
     } 
-    wait(NULL);
+    for (;;) {
+        int wait_res;
+        wait_res = wait(NULL);
+        if (wait_res == -1 && errno != EINTR)
+            break;
+    }
     free(name);
 }
 
 static void exec_selected_file(struct lof_item *selection, 
                                struct file_manager *fm)
 {
-    int pid, key;
+    int pid;
     endwin();
     pid = fork();
     if (pid == -1) {
@@ -135,11 +141,18 @@ static void exec_selected_file(struct lof_item *selection,
     } else
     if (pid == 0) {
         execl(selection->data.name, selection->data.name, NULL);
+        /*
         view_show_message(&fm->view, strerror(errno));
         key = getch();
+        */
         exit(1);
     } 
-    wait(NULL);
+    for (;;) {
+        int wait_res;
+        wait_res = wait(NULL);
+        if (wait_res == -1 && errno != EINTR)
+            break;
+    }
 }
 
 static void handle_selected_file(struct lof_item *selection, 
