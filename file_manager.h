@@ -11,7 +11,7 @@
 #include <dirent.h>
 
 struct file_manager {
-    DIR *dirp;
+    /*DIR *dirp;*/
     struct list_of_files files;
     struct fm_view view;
 };

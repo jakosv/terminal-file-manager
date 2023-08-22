@@ -9,14 +9,17 @@ struct fm_view {
     WINDOW *win;
     int rows, cols;
     struct lof_item *first, *last, *selected; 
+    int cur_pos;
 };
 
 void view_init(struct fm_view *view, struct lof_item *first);
-void view_update(struct fm_view *view, struct lof_item *first);
+void view_update(struct fm_view *view, struct lof_item *first, int cur_pos);
 void view_close(struct fm_view *view);
 
 void view_draw(const struct fm_view *view);
 void view_resize(struct fm_view *view);
+
+void view_hide(const struct fm_view *view);
 
 void view_show_message(const struct fm_view *view, const char *msg);
 char *view_get_input(const struct fm_view *view, const char *msg);

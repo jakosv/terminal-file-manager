@@ -14,7 +14,9 @@ struct list_of_files {
 
 void lof_init(struct list_of_files *lst);
 void lof_add(struct list_of_files *lst, const struct file_info *file);
-void lof_remove_item(struct list_of_files *lst, struct lof_item *item);
 void lof_free(struct list_of_files *lst);
+
+int lof_get_item_pos(struct lof_item *item, struct list_of_files *lst);
+struct lof_item *lof_get_item_by_pos(int pos, struct list_of_files *lst);
 
 #endif

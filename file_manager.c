@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/errno.h>
 #include <sys/wait.h>
+#include <stdlib.h>
 
 #include "file_manager.h"
 #include "directory.h"
@@ -14,21 +15,10 @@ enum { key_space = ' ' };
 
 static const char delete_file_alert[] = "Delete this file? (y/n)";
 
-static void fm_open_dir(struct file_manager *fm, const char *dir_path)
-{
-    fm->dirp = opendir(dir_path); 
-    if (!fm->dirp) {
-        view_show_message(&fm->view, dir_path);
-        perror(dir_path);
-        exit(1);
-    }
-    chdir(dir_path);
-}
-
 void fm_init(struct file_manager *fm, const char *dir_path)
 {
-    fm_open_dir(fm, dir_path);
-    get_dir_data(fm->dirp, &fm->files);
+    chdir(dir_path);
+    get_dir_data(".", &fm->files);
     view_init(&fm->view, fm->files.first);
 }
 
@@ -36,7 +26,22 @@ void fm_close(struct file_manager *fm)
 {
     view_close(&fm->view);
     lof_free(&fm->files);
-    closedir(fm->dirp);
+}
+
+static void fm_update(struct file_manager *fm)
+{
+    int first_item_pos, selected_item_pos, view_cur_pos;
+    struct lof_item *first_item;
+
+    first_item_pos = lof_get_item_pos(fm->view.first, &fm->files); 
+    selected_item_pos = lof_get_item_pos(fm->view.selected, &fm->files);
+    view_cur_pos = selected_item_pos - first_item_pos;
+
+    lof_free(&fm->files);
+    get_dir_data(".", &fm->files);
+
+    first_item = lof_get_item_by_pos(first_item_pos, &fm->files);
+    view_update(&fm->view, first_item, view_cur_pos);
 }
 
 static void move_file_to_trash(const char *file_name)
@@ -55,7 +60,6 @@ static void move_file_to_trash(const char *file_name)
 static void delete_file(struct file_manager *fm, struct lof_item *file)
 {
     int res;
-    struct lof_item *first, *selected;
     if (file->data.type != ft_file)
         return;
     /*
@@ -66,19 +70,7 @@ static void delete_file(struct file_manager *fm, struct lof_item *file)
         perror(file->data.name);
         exit(1);
     }
-    first = fm->view.first;
-    selected = file->prev;
-    if (file == first) {
-        if (first->prev) {
-            first = first->prev;
-        } else {
-            first = fm->files.first;
-            selected = first;
-        }
-    }
-    lof_remove_item(&fm->files, file);
-    view_update(&fm->view, first);
-    fm->view.selected = selected;
+    fm_update(fm);
 }
 
 static void open_selected_dir(struct lof_item *selection,
@@ -86,10 +78,8 @@ static void open_selected_dir(struct lof_item *selection,
 {
     if (fm->view.selected->data.type != ft_dir)
         return;
-    closedir(fm->dirp);
-    fm_open_dir(fm, selection->data.name);
-    lof_free(&fm->files);
-    get_dir_data(fm->dirp, &fm->files);
+    chdir(selection->data.name);
+    fm_update(fm);
 }
 
 static void wait_ignoring_interrupts(int *stat_loc)
@@ -116,26 +106,32 @@ static void str_trim(char *s)
     *s = '\0';
 }
 
-static void run_program(const char *name, char* const *args)
+static void run_program(const char *name, char* const *args, 
+                        struct file_manager *fm)
 {
     int pid;
 
-    endwin();
+    view_hide(&fm->view);
+
     pid = fork();
     if (pid == -1) {
         perror("fork");
         exit(1);
-    } else
+    }
     if (pid == 0) {
         execvp(name, args);
         perror(name);
-        /*
-        view_show_message(&fm->view, strerror(errno));
-        key = getch();
-        */
         exit(1);
     } 
     wait_ignoring_interrupts(NULL);
+
+    printf("\nPress any key to continue");
+    fflush(stdout);
+    cbreak();
+    getch();
+    printf("\n");
+
+    fm_update(fm);
 }
 
 static void open_selected_file(struct lof_item *selection, 
@@ -145,14 +141,14 @@ static void open_selected_file(struct lof_item *selection,
     char *args[3];
 
     prog_name = view_get_input(&fm->view, "Open file with");
-    if (!prog_name)
+    if (!prog_name || prog_name[0] == ' ')
         return;
     str_trim(prog_name);
 
     args[0] = prog_name;
     args[1] = selection->data.name;
     args[2] = NULL;
-    run_program(prog_name, args);
+    run_program(prog_name, args, fm);
 
     free(prog_name);
 }
@@ -170,7 +166,7 @@ static void exec_selected_file(struct lof_item *selection,
 
     args[0] = prog_name;
     args[1] = NULL;
-    run_program(prog_name, args);
+    run_program(prog_name, args, fm);
 
     free(prog_name);
 }
@@ -191,7 +187,6 @@ static void handle_selected_file(struct lof_item *selection,
         default:
             open_selected_file(selection, fm);
     }
-    view_update(&fm->view, fm->files.first);
 }
 
 static void handle_delete_key(struct file_manager *fm)
@@ -231,6 +226,17 @@ void fm_start(struct file_manager *fm)
         case 'p':
             view_page_up(&fm->view);
             break;
+        /*
+        case 'f':
+            fm_create_file(fm);
+            break;
+        case 'F':
+            fm_create_dir(fm);
+            break;
+        case 'c':
+            fm_copy_file(fm->view.selected, fm);
+            break;
+        */
         case KEY_RESIZE:
             view_resize(&fm->view);
             break;

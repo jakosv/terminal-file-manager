@@ -22,19 +22,6 @@ void lof_add(struct list_of_files *lst, const struct file_info *file)
     lst->last = tmp;
 }
 
-void lof_remove_item(struct list_of_files *lst, struct lof_item *item)
-{
-    if (item->prev)
-        item->prev->next = item->next;
-    else
-        lst->first = item->next;    
-    if (item->next)
-        item->next->prev = item->prev;
-    else
-        lst->last = item->prev;
-    free(item);
-}
-
 void lof_free(struct list_of_files *lst)
 {
     if (lst->first) {
@@ -46,4 +33,23 @@ void lof_free(struct list_of_files *lst)
         free(lst->last);
         lst->last = NULL;
     }
+}
+
+int lof_get_item_pos(struct lof_item *item, struct list_of_files *lst)
+{
+    struct lof_item *tmp;
+    int pos = 1;
+    for (tmp = lst->first; tmp != item; tmp = tmp->next)
+        pos++;
+    return pos;
+}
+
+struct lof_item *lof_get_item_by_pos(int pos, struct list_of_files *lst)
+{
+    struct lof_item *tmp;
+    int i;
+    tmp = lst->first;
+    for (i = 1; i < pos && tmp; i++)
+        tmp = tmp->next;
+    return tmp;
 }

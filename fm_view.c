@@ -11,6 +11,7 @@
 enum { reserved_rows = 4, header_height = 3 };
 enum { fsize_width = 8, ftime_width = 18 };
 enum { key_escape = 27 };
+enum { max_input_field_width = 50, input_win_padding = 5 };
 static const char fname_col[] = "Name";
 static const char fsize_col[] = "Size";
 static const char ftime_col[] = "Modify time";
@@ -56,29 +57,30 @@ void view_init(struct fm_view *view, struct lof_item *first)
     view->first = first;
     view->selected = first;
     view->last = get_view_last_item(view, first);
+    view->cur_pos = 0;
     refresh();
 }
 
-static int is_selected_in_range(const struct lof_item *selected,
-                                const struct lof_item *first, 
-                                const struct lof_item *last)
+static void set_view_current_pos(int pos, struct fm_view *view)
 {
+    int i;
     struct lof_item *tmp;
-    if (!selected)
-        return 0;
-    for (tmp = first; tmp != last; tmp = tmp->next)
-        if (tmp == selected)
-            return 1;
-    return 0;
+    tmp = view->first;
+    for (i = 0; i < pos; i++) {
+        tmp = tmp->next;
+        if (tmp == view->last)
+            break;
+    }
+    view->cur_pos = i;
+    view->selected = tmp;
 }
 
-void view_update(struct fm_view *view, struct lof_item *first)
+void view_update(struct fm_view *view, struct lof_item *first, int cur_pos)
 {
     wclear(view->win);
     view->first = first;
     view->last = get_view_last_item(view, first);
-    if (!is_selected_in_range(view->selected, view->first, view->last))
-        view->selected = first;
+    set_view_current_pos(cur_pos, view);
 }
 
 void view_close(struct fm_view *view)
@@ -138,20 +140,25 @@ static void draw_item_str(WINDOW *win,
                           const char *name_str, const char *size_str,
                           const char *time_str)
 {
-    int finfo_x, x, y;
+    int finfo_x, x;
 
     finfo_x = win_width-1 - get_file_info_max_width(win_width);
     
     if (is_selected)
         wattron(win, A_BOLD|A_UNDERLINE);
     mvwprintw(win, row, 1, "%s", name_str);
-    getyx(win, y, x);
+    x = getcurx(win);
     for (; x < finfo_x; x++)
         waddch(win, ' ');
     mvwprintw(win, row, finfo_x, "| %*s | %-*s", 
               fsize_width, size_str, ftime_width, time_str);
     if (is_selected)
         wattroff(win, A_BOLD|A_UNDERLINE);
+}
+
+void view_hide(const struct fm_view *view)
+{
+    endwin();
 }
 
 static void draw_item(WINDOW *win, struct lof_item *cur, int row, 
@@ -264,21 +271,27 @@ char *view_get_input(const struct fm_view *view, const char *msg)
     field[1] = NULL;
 
     set_field_back(field[0], A_UNDERLINE);
+    field_opts_off(field[0], O_STATIC);
     field_opts_off(field[0], O_AUTOSKIP);
+
+    set_max_field(field[0], max_input_field_width);
+    set_field_type(field[0], TYPE_ALNUM, 0);
 
     input_form = new_form(field);
     scale_form(input_form, &win_height, &win_width); 
 
-    win_x = (view->cols - (win_width+5)) / 2;
-    win_y = (view->rows - (win_height+5)) / 2;
-    input_win = newwin(win_height+5, win_width+5, win_y, win_x);
+    win_x = (view->cols - (win_width+input_win_padding)) / 2;
+    win_y = (view->rows - (win_height+input_win_padding)) / 2;
+    input_win = newwin(win_height+5, win_width+input_win_padding, 
+                       win_y, win_x);
     keypad(input_win, 1);
+    curs_set(1);
     
     set_form_win(input_form, input_win);
     set_form_sub(input_form, derwin(input_win, win_height, win_width, 2, 2));
     box(input_win, 0, 0);
 
-    print_in_middle(input_win, 1, 0, win_width+5, msg);
+    print_in_middle(input_win, 1, 0, win_width+input_win_padding, msg);
     post_form(input_form);
     wrefresh(input_win);
     refresh();
@@ -287,11 +300,17 @@ char *view_get_input(const struct fm_view *view, const char *msg)
 
     while ((ch = wgetch(input_win)) != key_escape) {
         switch (ch) {
+        case KEY_LEFT:
+            form_driver(input_form, REQ_PREV_CHAR);
+            break;
+        case KEY_RIGHT:
+            form_driver(input_form, REQ_NEXT_CHAR);
+            break;
         case KEY_ENTER:
-        case 10:
+        case '\n':
             form_driver(input_form, REQ_VALIDATION);
             buf = field_buffer(field[0], 0);
-            answer = malloc(strlen(buf)+1);
+            answer = malloc(max_input_field_width + 1);
             strcpy(answer, buf);
             goto quit;
         case KEY_BACKSPACE:
@@ -308,6 +327,7 @@ quit:
     unpost_form(input_form);
     free_form(input_form);
     free_field(field[0]);
+    curs_set(0);
 
     return answer;
 }
@@ -316,7 +336,7 @@ void view_resize(struct fm_view *view)
 {
     getmaxyx(stdscr, view->rows, view->cols);
     wresize(view->win, view->rows, view->cols);
-    view_update(view, view->first);
+    view_update(view, view->first, view->cur_pos);
     refresh();
 }
 
@@ -345,6 +365,7 @@ void view_page_down(struct fm_view *view)
     view->last = get_view_last_item(view, view->last->next);
     view->first = get_view_first_item(view, view->last);
     view->selected = view->first;
+    view->cur_pos = 0;
 }
 
 void view_page_up(struct fm_view *view)
@@ -356,6 +377,7 @@ void view_page_up(struct fm_view *view)
     view->first = get_view_first_item(view, view->first->prev);
     view->last = get_view_last_item(view, view->first);
     view->selected = view->last;
+    view->cur_pos = view->rows - reserved_rows;
 }
 
 void view_select_next(struct fm_view *view)
@@ -364,6 +386,8 @@ void view_select_next(struct fm_view *view)
         return;
     if (view->selected == view->last)
         view_scroll_down(view);
+    else
+        view->cur_pos++;
     view->selected = view->selected->next;
 }
 
@@ -373,5 +397,7 @@ void view_select_prev(struct fm_view *view)
         return;
     if (view->selected == view->first)
         view_scroll_up(view);
+    else
+        view->cur_pos--;
     view->selected = view->selected->prev;
 }
