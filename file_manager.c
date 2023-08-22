@@ -28,13 +28,20 @@ void fm_close(struct file_manager *fm)
     lof_free(&fm->files);
 }
 
-static void fm_update(struct file_manager *fm)
+static void fm_update(struct file_manager *fm, const char *dir_path)
 {
     int first_item_pos, selected_item_pos, view_cur_pos;
     struct lof_item *first_item;
 
-    first_item_pos = lof_get_item_pos(fm->view.first, &fm->files); 
-    selected_item_pos = lof_get_item_pos(fm->view.selected, &fm->files);
+    if (strcmp(dir_path, ".") == 0) {
+        first_item_pos = lof_get_item_pos(fm->view.first, &fm->files); 
+        selected_item_pos = lof_get_item_pos(fm->view.selected, &fm->files);
+    } else {
+        chdir(dir_path);
+        first_item_pos = 0;
+        selected_item_pos = 0;
+    }
+
     view_cur_pos = selected_item_pos - first_item_pos;
 
     lof_free(&fm->files);
@@ -70,7 +77,7 @@ static void delete_file(struct file_manager *fm, struct lof_item *file)
         perror(file->data.name);
         exit(1);
     }
-    fm_update(fm);
+    fm_update(fm, ".");
 }
 
 static void open_selected_dir(struct lof_item *selection,
@@ -78,8 +85,7 @@ static void open_selected_dir(struct lof_item *selection,
 {
     if (fm->view.selected->data.type != ft_dir)
         return;
-    chdir(selection->data.name);
-    fm_update(fm);
+    fm_update(fm, selection->data.name);
 }
 
 static void wait_ignoring_interrupts(int *stat_loc)
@@ -131,7 +137,7 @@ static void run_program(const char *name, char* const *args,
     getch();
     printf("\n");
 
-    fm_update(fm);
+    fm_update(fm, ".");
 }
 
 static void open_selected_file(struct lof_item *selection, 
@@ -189,6 +195,26 @@ static void handle_selected_file(struct lof_item *selection,
     }
 }
 
+static void fm_create_dir(struct file_manager *fm)
+{
+    char *dir_name;
+    int res;
+
+    dir_name = view_get_input(&fm->view, "Enter directory name");
+    if (!dir_name || dir_name[0] == ' ')
+        return;
+    str_trim(dir_name);
+
+    res = mkdir(dir_name, 0777);
+    if (res == -1) {
+        perror(dir_name);
+        exit(1);
+    }
+
+    free(dir_name);
+    fm_update(fm, ".");
+}
+
 static void handle_delete_key(struct file_manager *fm)
 {
     int key;
@@ -212,6 +238,9 @@ void fm_start(struct file_manager *fm)
         case 'j':
             view_select_next(&fm->view);
             break;
+        case 'F':
+            fm_create_dir(fm);
+            break;
         case 'd':
             handle_delete_key(fm);
             break;
@@ -229,9 +258,6 @@ void fm_start(struct file_manager *fm)
         /*
         case 'f':
             fm_create_file(fm);
-            break;
-        case 'F':
-            fm_create_dir(fm);
             break;
         case 'c':
             fm_copy_file(fm->view.selected, fm);
