@@ -33,8 +33,8 @@ void get_file_info(const char *file_name, struct file_info *info)
         stat(file_name, &buf);
     info->uid = buf.st_uid;
     strncpy(info->name, file_name, max_name_len);
-    info->size = buf.st_size;
     info->name[max_name_len] = '\0';
+    info->size = buf.st_size;
     info->mode = buf.st_mode & 0x0fff;
     info->type = get_file_type(buf.st_mode);
     info->mtime = buf.st_mtime;

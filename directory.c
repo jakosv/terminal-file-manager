@@ -27,10 +27,10 @@ void get_dir_data(const char *dir_path, struct list_of_files *lst)
     lof_init(lst);
     for (i = 0; i < n; i++) {
         struct file_info file;
-        if (strcmp(dir_rec[i]->d_name, ".") == 0)
-            continue;
-        get_file_info(dir_rec[i]->d_name, &file);
-        lof_add(lst, &file);
+        if (strcmp(dir_rec[i]->d_name, ".") != 0) {
+            get_file_info(dir_rec[i]->d_name, &file);
+            lof_add(lst, &file);
+        }
         free(dir_rec[i]);
     }
     /*
