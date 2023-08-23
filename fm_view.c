@@ -342,7 +342,7 @@ char *view_get_input(const struct fm_view *view, const char *msg)
     field_opts_off(field[0], O_PASSOK);
 
     */
-    set_field_type(field[0], TYPE_REGEXP, "^[A-z]+");
+    set_field_type(field[0], TYPE_REGEXP, input_form_regex);
     /*
     set_max_field(field[0], max_input_field_width);
     */
@@ -372,6 +372,7 @@ char *view_get_input(const struct fm_view *view, const char *msg)
     form_driver(input_form, REQ_FIRST_FIELD);
 
     while ((ch = wgetch(input_win)) != key_escape) {
+        int err;
         switch (ch) {
         case KEY_LEFT:
             form_driver(input_form, REQ_PREV_CHAR);
@@ -381,7 +382,6 @@ char *view_get_input(const struct fm_view *view, const char *msg)
             break;
         case KEY_ENTER:
         case '\n':
-            int err;
             err = form_driver(input_form, REQ_VALIDATION);
             if (err != E_OK)
                 break;
