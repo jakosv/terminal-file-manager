@@ -107,7 +107,7 @@ static struct lof_item *get_view_first_item(struct fm_view *view,
 
 void view_init(struct fm_view *view, struct lof_item *first)
 {
-    setlocale(LC_ALL, "");
+    setlocale(LC_CTYPE, "");
     initscr();
     getmaxyx(stdscr, view->rows, view->cols);
     cbreak();
@@ -336,16 +336,14 @@ char *view_get_input(const struct fm_view *view, const char *msg)
 
     set_field_back(field[0], A_UNDERLINE);
     field_opts_off(field[0], O_AUTOSKIP);
-    /*
     field_opts_off(field[0], O_STATIC);
+    /*
     field_opts_off(field[0], O_WRAP);
     field_opts_off(field[0], O_PASSOK);
+    */
 
-    */
     set_field_type(field[0], TYPE_REGEXP, input_form_regex);
-    /*
     set_max_field(field[0], max_input_field_width);
-    */
     /*
     set_field_type(field[0], TYPE_REGEXP, "[A-Za-z_.]+[A-Za-z0-9_.]*");
     */
@@ -355,7 +353,8 @@ char *view_get_input(const struct fm_view *view, const char *msg)
 
     win_x = (view->cols - (win_width+input_win_padding)) / 2;
     win_y = (view->rows - (win_height+input_win_padding)) / 2;
-    input_win = newwin(win_height+5, win_width+input_win_padding, 
+    input_win = newwin(win_height+input_win_padding, 
+                       win_width+input_win_padding, 
                        win_y, win_x);
     keypad(input_win, 1);
     curs_set(1);

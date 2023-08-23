@@ -1,6 +1,6 @@
 PROG = file-manager
 CFLAGS = -Wall -g
-LDFLAGS = -lncurses -lform -lm
+LDFLAGS = -lncursesw -lformw -lm
 OBJMODULES = file_manager.o fm_view.o file.o directory.o list_of_files.o
 
 .PHONY: clean
