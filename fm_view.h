@@ -31,4 +31,6 @@ void view_page_up(struct fm_view *view);
 void view_select_next(struct fm_view *view);
 void view_select_prev(struct fm_view *view);
 
+int view_get_item_rows_count(const struct fm_view *view);
+
 #endif

@@ -15,14 +15,72 @@ enum { max_input_field_width = 50, input_win_padding = 5 };
 static const char fname_col[] = "Name";
 static const char fsize_col[] = "Size";
 static const char ftime_col[] = "Modify time";
+static const char input_form_regex[] = "^[A-z.]+";
 
+int view_get_item_rows_count(const struct fm_view *view)
+{
+    return view->rows - reserved_rows;
+}
+
+static void set_view_by_last_item(struct lof_item *last, 
+                                  struct fm_view *view)
+{
+    int row, item_rows_cnt;
+    struct lof_item *first;
+
+    item_rows_cnt = view_get_item_rows_count(view);
+    first = last;
+    view->selected = last;
+    for (row = 1; row < item_rows_cnt; row++)
+        if (first->prev)
+            first = first->prev;
+        else
+            break;
+    for (; row < item_rows_cnt; row++)
+        if (last->next)
+            last = last->next;
+        else
+            break;
+
+    view->first = first;
+    view->last = last;
+}
+
+static void set_view_by_first_item(struct lof_item *first, 
+                                   struct fm_view *view)
+{
+    int row, item_rows_cnt;
+    struct lof_item *last;
+
+    item_rows_cnt = view_get_item_rows_count(view);
+    view->selected = first;
+
+    last = first;
+    for (row = 1; row < item_rows_cnt; row++)
+        if (last->next)
+            last = last->next;
+        else
+            break;
+    for (; row < item_rows_cnt; row++)
+        if (first->prev)
+            first = first->prev;
+        else
+            break;
+
+    view->first = first;
+    view->last = last;
+}
+
+/*
 static struct lof_item *get_view_last_item(struct fm_view *view, 
                                            struct lof_item *first)
 {
-    int row;
+    int row, item_rows_cnt;
     struct lof_item *last;
+
+    item_rows_cnt = view_get_item_rows_count(view);
     last = first;
-    for (row = 1; row < view->rows - reserved_rows; row++)
+    for (row = 1; row < item_rows_cnt; row++)
         if (last->next)
             last = last->next;
         else
@@ -33,16 +91,19 @@ static struct lof_item *get_view_last_item(struct fm_view *view,
 static struct lof_item *get_view_first_item(struct fm_view *view, 
                                             struct lof_item *last)
 {
-    int row;
+    int row, item_rows_cnt;
     struct lof_item *first;
+
+    item_rows_cnt = view_get_item_rows_count(view);
     first = last;
-    for (row = 1; row < view->rows - reserved_rows; row++)
+    for (row = 1; row < item_rows_cnt; row++)
         if (first->prev)
             first = first->prev;
         else
             break;
     return first;
 }
+*/
 
 void view_init(struct fm_view *view, struct lof_item *first)
 {
@@ -54,14 +115,16 @@ void view_init(struct fm_view *view, struct lof_item *first)
     keypad(stdscr, 1);
     curs_set(0);
     view->win = newwin(view->rows, view->cols, 0, 0);
+    set_view_by_first_item(first, view);
+    /*
     view->first = first;
     view->selected = first;
     view->last = get_view_last_item(view, first);
-    view->cur_pos = 0;
+    */
     refresh();
 }
 
-static void set_view_current_pos(int pos, struct fm_view *view)
+static void select_item_by_pos(int pos, struct fm_view *view)
 {
     int i;
     struct lof_item *tmp;
@@ -71,16 +134,18 @@ static void set_view_current_pos(int pos, struct fm_view *view)
         if (tmp == view->last)
             break;
     }
-    view->cur_pos = i;
     view->selected = tmp;
 }
 
-void view_update(struct fm_view *view, struct lof_item *first, int cur_pos)
+void view_update(struct fm_view *view, struct lof_item *first, int pos)
 {
     wclear(view->win);
+    set_view_by_first_item(first, view);
+    /*
     view->first = first;
     view->last = get_view_last_item(view, first);
-    set_view_current_pos(cur_pos, view);
+    */
+    select_item_by_pos(pos, view);
 }
 
 void view_close(struct fm_view *view)
@@ -259,7 +324,7 @@ static void print_in_middle(WINDOW *win, int starty, int startx, int width,
 
 char *view_get_input(const struct fm_view *view, const char *msg)
 {
-    FIELD *field[2];
+    FIELD *field[2] = { NULL };
     FORM *input_form;
     WINDOW *input_win;
     int ch, win_x, win_y, win_height, win_width, msg_len;
@@ -268,14 +333,22 @@ char *view_get_input(const struct fm_view *view, const char *msg)
     answer = NULL;
     msg_len = strlen(msg);
     field[0] = new_field(1, msg_len, 1, 1, 0, 0);
-    field[1] = NULL;
 
     set_field_back(field[0], A_UNDERLINE);
-    field_opts_off(field[0], O_STATIC);
     field_opts_off(field[0], O_AUTOSKIP);
+    /*
+    field_opts_off(field[0], O_STATIC);
+    field_opts_off(field[0], O_WRAP);
+    field_opts_off(field[0], O_PASSOK);
 
+    */
+    set_field_type(field[0], TYPE_REGEXP, "^[A-z]+");
+    /*
     set_max_field(field[0], max_input_field_width);
-    set_field_type(field[0], TYPE_ALNUM, 0);
+    */
+    /*
+    set_field_type(field[0], TYPE_REGEXP, "[A-Za-z_.]+[A-Za-z0-9_.]*");
+    */
 
     input_form = new_form(field);
     scale_form(input_form, &win_height, &win_width); 
@@ -308,7 +381,14 @@ char *view_get_input(const struct fm_view *view, const char *msg)
             break;
         case KEY_ENTER:
         case '\n':
-            form_driver(input_form, REQ_VALIDATION);
+            int err;
+            err = form_driver(input_form, REQ_VALIDATION);
+            if (err != E_OK)
+                break;
+            /*
+            if (err == E_INVALID_FIELD)
+                break;
+            */
             buf = field_buffer(field[0], 0);
             answer = malloc(max_input_field_width + 1);
             strcpy(answer, buf);
@@ -332,11 +412,23 @@ quit:
     return answer;
 }
 
+static int get_selected_item_pos(const struct fm_view *view)
+{
+    struct lof_item *tmp;
+    int pos;
+
+    pos = 0;
+    for (tmp = view->first; tmp != view->selected; tmp = tmp->next)
+        pos++;
+
+    return pos;
+}
+
 void view_resize(struct fm_view *view)
 {
     getmaxyx(stdscr, view->rows, view->cols);
     wresize(view->win, view->rows, view->cols);
-    view_update(view, view->first, view->cur_pos);
+    view_update(view, view->first, get_selected_item_pos(view));
     refresh();
 }
 
@@ -362,10 +454,12 @@ void view_page_down(struct fm_view *view)
         view->selected = view->last;
         return;
     }
+    set_view_by_first_item(view->last->next, view);
+    /*
     view->last = get_view_last_item(view, view->last->next);
     view->first = get_view_first_item(view, view->last);
     view->selected = view->first;
-    view->cur_pos = 0;
+    */
 }
 
 void view_page_up(struct fm_view *view)
@@ -374,10 +468,12 @@ void view_page_up(struct fm_view *view)
         view->selected = view->first;
         return;
     }
+    set_view_by_last_item(view->first->prev, view);
+    /*
     view->first = get_view_first_item(view, view->first->prev);
     view->last = get_view_last_item(view, view->first);
     view->selected = view->last;
-    view->cur_pos = view->rows - reserved_rows;
+    */
 }
 
 void view_select_next(struct fm_view *view)
@@ -386,8 +482,6 @@ void view_select_next(struct fm_view *view)
         return;
     if (view->selected == view->last)
         view_scroll_down(view);
-    else
-        view->cur_pos++;
     view->selected = view->selected->next;
 }
 
@@ -397,7 +491,5 @@ void view_select_prev(struct fm_view *view)
         return;
     if (view->selected == view->first)
         view_scroll_up(view);
-    else
-        view->cur_pos--;
     view->selected = view->selected->prev;
 }
