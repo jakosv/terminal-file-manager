@@ -92,29 +92,6 @@ static void move_file_to_trash(const char *file_name)
 }
 */
 
-static void delete_file(struct file_info *file, struct file_manager *fm)
-{
-    int res;
-    /*
-    move_file_to_trash(file->name);
-    */
-    switch(file->type) {
-    case ft_file:
-        res = unlink(file->name);
-        break;
-    case ft_dir:
-        res = rmdir(file->name);
-        break;
-    default:
-        return;
-    }
-
-    if (res == -1)
-        fm_error(file->name, fm);
-    else
-        fm_update(fm, NULL);
-}
-
 static void open_selected_dir(struct lof_item *selection,
                               struct file_manager *fm)
 {
@@ -250,21 +227,18 @@ static void fm_create_file(struct file_manager *fm)
     free(file_name);
 }
 
-/*
 static void fm_copy_file(struct lof_item *selection, 
                          struct file_manager *fm)
 {
     int err;
-    char *source_name, *copy_path;
-
-    source_name = selection->data.name;
+    char *copy_path;
 
     copy_path = view_get_input(&fm->view, "Enter copy destination");
     if (!copy_path || copy_path[0] == ' ')
         return;
     str_trim(copy_path);
 
-    err = link(source_name, copy_path);
+    err = copy_file(&selection->data, copy_path);
     if (err == -1)
         fm_error(copy_path, fm);
     else
@@ -272,28 +246,45 @@ static void fm_copy_file(struct lof_item *selection,
 
     free(copy_path);
 }
-*/
 
 static void fm_move_file(struct lof_item *selection, 
                          struct file_manager *fm)
 {
     int err;
-    char *source_name, *new_path;
-
-    source_name = selection->data.name;
+    char *new_path;
 
     new_path = view_get_input(&fm->view, "Enter new file path");
     if (!new_path || new_path[0] == ' ')
         return;
     str_trim(new_path);
 
-    err = rename(source_name, new_path);
+    err = move_file(&selection->data, new_path);
     if (err == -1)
         fm_error(new_path, fm);
     else
         fm_update(fm, NULL);
 
     free(new_path);
+}
+
+static void fm_rename_file(struct lof_item *selection, 
+                           struct file_manager *fm)
+{
+    int err;
+    char *new_name;
+
+    new_name = view_get_input(&fm->view, "Enter new file name");
+    if (!new_name || new_name[0] == ' ')
+        return;
+    str_trim(new_name);
+
+    err = rename_file(&selection->data, new_name);
+    if (err == -1)
+        fm_error(new_name, fm);
+    else
+        fm_update(fm, NULL);
+
+    free(new_name);
 }
 
 static void fm_create_dir(struct file_manager *fm)
@@ -319,11 +310,18 @@ static void fm_create_dir(struct file_manager *fm)
 static void fm_delete_file(struct lof_item *selection, 
                            struct file_manager *fm)
 {
-    int key;
+    int key, res;
+
     view_show_message(&fm->view, delete_file_alert);
     key = getch();
-    if (key == 'y')
-        delete_file(&selection->data, fm);
+    if (key == 'n')
+        return;
+
+    res = remove_file(&selection->data);
+    if (res == -1)
+        fm_error(selection->data.name, fm);
+    else
+        fm_update(fm, NULL);
 }
 
 void fm_start(struct file_manager *fm)
@@ -346,13 +344,14 @@ void fm_start(struct file_manager *fm)
         case 'F':
             fm_create_dir(fm);
             break;
-        /*
         case 'c':
             fm_copy_file(fm->view.selected, fm);
             break;
-        */
         case 'm':
             fm_move_file(fm->view.selected, fm);
+            break;
+        case 'r':
+            fm_rename_file(fm->view.selected, fm);
             break;
         case 'd':
             fm_delete_file(fm->view.selected, fm);

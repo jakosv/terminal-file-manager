@@ -6,6 +6,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
+
+enum { open_file_mode = 0666 };
+enum { buf_size = 4096 };
 
 static enum file_type get_file_type(int mode)
 {
@@ -66,12 +70,53 @@ void file_size_str(long size, char *str, int str_size)
     snprintf(str, str_size, "%3.*f%c", sign_digs, res, size_ch[i]);
 }
 
-char *file_owner_name(int uid)
+int remove_file(const struct file_info *file)
 {
+    switch(file->type) {
+    case ft_file:
+        return unlink(file->name);
+    case ft_dir:
+        return rmdir(file->name);
+    default:
+        /* handle other types */
+    }
+
     return 0;
 }
 
-char *file_ftime(time_t time)
+int rename_file(const struct file_info *file, const char *new_name)
 {
-    return 0;
+    return rename(file->name, new_name);
+}
+
+int move_file(const struct file_info *file, const char *new_path)
+{
+    return rename(file->name, new_path);
+}
+
+int copy_file(const struct file_info *file, const char *dest_path)
+{
+    int fd_source, fd_dest, res;
+    char buf[buf_size];
+
+    fd_source = open(file->name, O_RDONLY, open_file_mode);
+    if (fd_source == -1)
+        return -1;
+
+    fd_dest = open(dest_path, O_CREAT|O_WRONLY, open_file_mode);
+    if (fd_dest == -1)
+        return -1;
+    
+    for (;;) {
+        res = read(fd_source, buf, buf_size);
+        if (res <= 0)
+            break;
+        res = write(fd_dest, buf, res);
+        if (res == -1)
+            break;
+    }
+
+    close(fd_source);
+    close(fd_dest);
+    return res;
 }

@@ -19,7 +19,10 @@ struct file_info {
 void get_file_info(const char *file_name, struct file_info *info);
 
 void file_size_str(long size, char *str, int str_size);
-char *file_owner_name(int uid);
-char *file_ftime(time_t time);
+
+int remove_file(const struct file_info *file);
+int rename_file(const struct file_info *file, const char *new_name);
+int move_file(const struct file_info *file, const char *new_path);
+int copy_file(const struct file_info *file, const char *dest_path);
 
 #endif
