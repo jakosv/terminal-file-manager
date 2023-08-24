@@ -15,19 +15,6 @@ enum { key_space = ' ' };
 
 static const char delete_file_alert[] = "Delete this file? (y/n)";
 
-void fm_init(struct file_manager *fm, const char *dir_path)
-{
-    chdir(dir_path);
-    get_dir_data(".", &fm->files);
-    view_init(&fm->view, fm->files.first);
-}
-
-void fm_close(struct file_manager *fm)
-{
-    view_close(&fm->view);
-    lof_free(&fm->files);
-}
-
 static void fm_update(struct file_manager *fm, const char *new_dir_path)
 {
     int first_item_pos, selected_item_pos, view_cur_pos;
@@ -52,6 +39,45 @@ static void fm_update(struct file_manager *fm, const char *new_dir_path)
     view_update(&fm->view, first_item, view_cur_pos);
 }
 
+static char *get_error_message(const char *s)
+{
+    char *err_msg, *full_err_msg;
+    int str_len, err_len, res_len;
+
+    str_len = strlen(s);
+    err_msg = strerror(errno);
+    err_len = strlen(err_msg);
+    res_len = str_len + err_len + 3;
+
+    full_err_msg = malloc(res_len);
+    snprintf(full_err_msg, res_len, "%s: %s", s, err_msg);
+    return full_err_msg;
+}
+
+static void fm_error(const char *err_title, struct file_manager *fm)
+{
+    char *err_msg;
+    err_msg = get_error_message(err_title);
+    view_show_message(&fm->view, err_msg);
+    getch();
+    fm_update(fm, NULL);
+    free(err_msg);
+}
+
+void fm_init(struct file_manager *fm, const char *dir_path)
+{
+    chdir(dir_path);
+    get_dir_data(".", &fm->files);
+    view_init(&fm->view, fm->files.first);
+}
+
+void fm_close(struct file_manager *fm)
+{
+    view_close(&fm->view);
+    lof_free(&fm->files);
+}
+
+/*
 static void move_file_to_trash(const char *file_name)
 {
     int res;
@@ -60,25 +86,33 @@ static void move_file_to_trash(const char *file_name)
     strncat(trash_file_path, file_name, strlen(file_name)); 
     res = link(file_name, trash_file_path);
     if (res == -1) {
-        perror(file_name);
-        exit(1);
+        fm_error("delete", fm));
+        return;
     }
 }
+*/
 
-static void delete_file(struct file_manager *fm, struct lof_item *file)
+static void delete_file(struct file_info *file, struct file_manager *fm)
 {
     int res;
-    if (file->data.type != ft_file)
-        return;
     /*
-    move_file_to_trash(file->data.name);
+    move_file_to_trash(file->name);
     */
-    res = unlink(file->data.name);
-    if (res == -1) {
-        perror(file->data.name);
-        exit(1);
+    switch(file->type) {
+    case ft_file:
+        res = unlink(file->name);
+        break;
+    case ft_dir:
+        res = rmdir(file->name);
+        break;
+    default:
+        return;
     }
-    fm_update(fm, NULL);
+
+    if (res == -1)
+        fm_error(file->name, fm);
+    else
+        fm_update(fm, NULL);
 }
 
 static void open_selected_dir(struct lof_item *selection,
@@ -122,13 +156,13 @@ static void run_program(const char *name, char* const *args,
 
     pid = fork();
     if (pid == -1) {
-        perror("fork");
-        exit(1);
+        fm_error("fork", fm);
+        return;
     }
     if (pid == 0) {
         execvp(name, args);
-        perror(name);
-        exit(1);
+        fm_error(name, fm);
+        return;
     } 
     wait_ignoring_interrupts(NULL);
 
@@ -208,13 +242,58 @@ static void fm_create_file(struct file_manager *fm)
 
     fd = open(file_name, O_CREAT|O_WRONLY|O_TRUNC, 0666);
     if (fd == -1) {
-        perror(file_name);
-        exit(1);
+        fm_error(file_name, fm);
+    } else {
+        close(fd);
+        fm_update(fm, NULL);
     }
-    close(fd);
-
     free(file_name);
-    fm_update(fm, NULL);
+}
+
+/*
+static void fm_copy_file(struct lof_item *selection, 
+                         struct file_manager *fm)
+{
+    int err;
+    char *source_name, *copy_path;
+
+    source_name = selection->data.name;
+
+    copy_path = view_get_input(&fm->view, "Enter copy destination");
+    if (!copy_path || copy_path[0] == ' ')
+        return;
+    str_trim(copy_path);
+
+    err = link(source_name, copy_path);
+    if (err == -1)
+        fm_error(copy_path, fm);
+    else
+        fm_update(fm, NULL);
+
+    free(copy_path);
+}
+*/
+
+static void fm_move_file(struct lof_item *selection, 
+                         struct file_manager *fm)
+{
+    int err;
+    char *source_name, *new_path;
+
+    source_name = selection->data.name;
+
+    new_path = view_get_input(&fm->view, "Enter new file path");
+    if (!new_path || new_path[0] == ' ')
+        return;
+    str_trim(new_path);
+
+    err = rename(source_name, new_path);
+    if (err == -1)
+        fm_error(new_path, fm);
+    else
+        fm_update(fm, NULL);
+
+    free(new_path);
 }
 
 static void fm_create_dir(struct file_manager *fm)
@@ -229,21 +308,22 @@ static void fm_create_dir(struct file_manager *fm)
 
     res = mkdir(dir_name, 0777);
     if (res == -1) {
-        perror(dir_name);
-        exit(1);
+        fm_error(dir_name, fm);
+        return;
     }
 
     free(dir_name);
     fm_update(fm, NULL);
 }
 
-static void handle_delete_key(struct file_manager *fm)
+static void fm_delete_file(struct lof_item *selection, 
+                           struct file_manager *fm)
 {
     int key;
     view_show_message(&fm->view, delete_file_alert);
     key = getch();
     if (key == 'y')
-        delete_file(fm, fm->view.selected);
+        delete_file(&selection->data, fm);
 }
 
 void fm_start(struct file_manager *fm)
@@ -266,8 +346,16 @@ void fm_start(struct file_manager *fm)
         case 'F':
             fm_create_dir(fm);
             break;
+        /*
+        case 'c':
+            fm_copy_file(fm->view.selected, fm);
+            break;
+        */
+        case 'm':
+            fm_move_file(fm->view.selected, fm);
+            break;
         case 'd':
-            handle_delete_key(fm);
+            fm_delete_file(fm->view.selected, fm);
             break;
         case KEY_ENTER:
         case 10:
@@ -280,11 +368,6 @@ void fm_start(struct file_manager *fm)
         case 'p':
             view_page_up(&fm->view);
             break;
-        /*
-        case 'c':
-            fm_copy_file(fm->view.selected, fm);
-            break;
-        */
         case KEY_RESIZE:
             view_resize(&fm->view);
             break;
