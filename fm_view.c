@@ -130,9 +130,9 @@ static void select_item_by_pos(int pos, struct fm_view *view)
     struct lof_item *tmp;
     tmp = view->first;
     for (i = 0; i < pos; i++) {
-        tmp = tmp->next;
         if (tmp == view->last)
             break;
+        tmp = tmp->next;
     }
     view->selected = tmp;
 }
