@@ -78,6 +78,7 @@ int remove_file(const struct file_info *file)
     case ft_dir:
         return rmdir(file->name);
     default:
+        break;
         /* handle other types */
     }
 

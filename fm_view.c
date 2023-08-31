@@ -71,40 +71,6 @@ static void set_view_by_first_item(struct lof_item *first,
     view->last = last;
 }
 
-/*
-static struct lof_item *get_view_last_item(struct fm_view *view, 
-                                           struct lof_item *first)
-{
-    int row, item_rows_cnt;
-    struct lof_item *last;
-
-    item_rows_cnt = view_get_item_rows_count(view);
-    last = first;
-    for (row = 1; row < item_rows_cnt; row++)
-        if (last->next)
-            last = last->next;
-        else
-            break;
-    return last;
-}
-
-static struct lof_item *get_view_first_item(struct fm_view *view, 
-                                            struct lof_item *last)
-{
-    int row, item_rows_cnt;
-    struct lof_item *first;
-
-    item_rows_cnt = view_get_item_rows_count(view);
-    first = last;
-    for (row = 1; row < item_rows_cnt; row++)
-        if (first->prev)
-            first = first->prev;
-        else
-            break;
-    return first;
-}
-*/
-
 void view_init(struct fm_view *view, struct lof_item *first)
 {
     setlocale(LC_CTYPE, "");
@@ -116,11 +82,6 @@ void view_init(struct fm_view *view, struct lof_item *first)
     curs_set(0);
     view->win = newwin(view->rows, view->cols, 0, 0);
     set_view_by_first_item(first, view);
-    /*
-    view->first = first;
-    view->selected = first;
-    view->last = get_view_last_item(view, first);
-    */
     refresh();
 }
 
@@ -141,10 +102,6 @@ void view_update(struct fm_view *view, struct lof_item *first, int pos)
 {
     wclear(view->win);
     set_view_by_first_item(first, view);
-    /*
-    view->first = first;
-    view->last = get_view_last_item(view, first);
-    */
     select_item_by_pos(pos, view);
 }
 
@@ -280,9 +237,6 @@ void view_draw(const struct fm_view *view)
 {
     struct lof_item *tmp;
     int row;
-    /*
-    wclear(view->win);
-    */
     box(view->win, 0, 0);
     draw_header(view->win, 1, view->cols);
     row = header_height;
@@ -291,17 +245,27 @@ void view_draw(const struct fm_view *view)
     wrefresh(view->win);
 }
 
+static WINDOW *create_window_in_center(int height, int width, 
+                                       int cols, int rows)
+{
+    int win_x, win_y;
+    WINDOW *win;
+    win_x = (cols - width) / 2;
+    win_y = (rows - height) / 2;
+    win = newwin(height, width, win_y, win_x);
+    box(win, 0, 0);
+    return win;
+}
+
 void view_show_message(const struct fm_view *view, const char *msg)
 {
-    int win_x, win_y, win_height, win_width, msg_len;
+    int win_height, win_width, msg_len;
     WINDOW *msg_win;
     msg_len = strlen(msg);
     win_height = 3;
     win_width = msg_len + 2;
-    win_x = (view->cols - win_width) / 2;
-    win_y = (view->rows - win_height) / 2;
-    msg_win = newwin(win_height, win_width, win_y, win_x);
-    box(msg_win, 0, 0);
+    msg_win = create_window_in_center(win_height, win_width, 
+                                      view->cols, view->rows);
     refresh();
     mvwprintw(msg_win, 1, 1, "%s", msg);
     wrefresh(msg_win);
@@ -322,90 +286,87 @@ static void print_in_middle(WINDOW *win, int starty, int startx, int width,
     refresh();
 }
 
+static char *get_form_input(FIELD *field[2], FORM *form, WINDOW *win)
+{
+    int ch;
+    char *answer = NULL;
+
+    form_driver(form, REQ_FIRST_FIELD);
+
+    while ((ch = wgetch(win)) != key_escape) {
+        int err;
+        switch (ch) {
+        case KEY_LEFT:
+            form_driver(form, REQ_PREV_CHAR);
+            break;
+        case KEY_RIGHT:
+            form_driver(form, REQ_NEXT_CHAR);
+            break;
+        case KEY_ENTER:
+        case '\n':
+            err = form_driver(form, REQ_VALIDATION);
+            if (err != E_OK)
+                break;
+            answer = malloc(max_input_field_width + 1);
+            strncpy(answer, field_buffer(field[0], 0), max_input_field_width);
+            answer[max_input_field_width] = '\0';
+            return answer;
+        case KEY_BACKSPACE:
+        case 127:
+            form_driver(form, REQ_DEL_PREV);
+            break;
+        default:
+            form_driver(form, ch);
+            break;
+        }
+    }
+
+    return NULL;
+}
+
 char *view_get_input(const struct fm_view *view, const char *msg)
 {
-    FIELD *field[2] = { NULL };
+    FIELD *field[2];
     FORM *input_form;
     WINDOW *input_win;
-    int ch, win_x, win_y, win_height, win_width, msg_len;
-    char *answer, *buf;
+    int win_height, win_width, msg_len;
+    char *answer;
 
     answer = NULL;
     msg_len = strlen(msg);
     field[0] = new_field(1, msg_len, 1, 1, 0, 0);
+    field[1] = NULL;
 
     set_field_back(field[0], A_UNDERLINE);
     field_opts_off(field[0], O_AUTOSKIP);
     field_opts_off(field[0], O_STATIC);
-    /*
-    field_opts_off(field[0], O_WRAP);
-    field_opts_off(field[0], O_PASSOK);
-    */
 
     set_field_type(field[0], TYPE_REGEXP, input_form_regex);
     set_max_field(field[0], max_input_field_width);
-    /*
-    set_field_type(field[0], TYPE_REGEXP, "[A-Za-z_.]+[A-Za-z0-9_.]*");
-    */
 
     input_form = new_form(field);
     scale_form(input_form, &win_height, &win_width); 
 
-    win_x = (view->cols - (win_width+input_win_padding)) / 2;
-    win_y = (view->rows - (win_height+input_win_padding)) / 2;
-    input_win = newwin(win_height+input_win_padding, 
-                       win_width+input_win_padding, 
-                       win_y, win_x);
+    input_win = create_window_in_center(win_height + input_win_padding, 
+                                        win_width + input_win_padding, 
+                                        view->cols, view->rows);
     keypad(input_win, 1);
     curs_set(1);
     
     set_form_win(input_form, input_win);
     set_form_sub(input_form, derwin(input_win, win_height, win_width, 2, 2));
-    box(input_win, 0, 0);
 
     print_in_middle(input_win, 1, 0, win_width+input_win_padding, msg);
     post_form(input_form);
     wrefresh(input_win);
     refresh();
 
-    form_driver(input_form, REQ_FIRST_FIELD);
+    answer = get_form_input(field, input_form, input_win);
 
-    while ((ch = wgetch(input_win)) != key_escape) {
-        int err;
-        switch (ch) {
-        case KEY_LEFT:
-            form_driver(input_form, REQ_PREV_CHAR);
-            break;
-        case KEY_RIGHT:
-            form_driver(input_form, REQ_NEXT_CHAR);
-            break;
-        case KEY_ENTER:
-        case '\n':
-            err = form_driver(input_form, REQ_VALIDATION);
-            if (err != E_OK)
-                break;
-            /*
-            if (err == E_INVALID_FIELD)
-                break;
-            */
-            buf = field_buffer(field[0], 0);
-            answer = malloc(max_input_field_width + 1);
-            strcpy(answer, buf);
-            goto quit;
-        case KEY_BACKSPACE:
-        case 127:
-            form_driver(input_form, REQ_DEL_PREV);
-            break;
-        default:
-            form_driver(input_form, ch);
-            break;
-        }
-    }
-
-quit:
     unpost_form(input_form);
     free_form(input_form);
     free_field(field[0]);
+    delwin(input_win);
     curs_set(0);
 
     return answer;
@@ -454,11 +415,6 @@ void view_page_down(struct fm_view *view)
         return;
     }
     set_view_by_first_item(view->last->next, view);
-    /*
-    view->last = get_view_last_item(view, view->last->next);
-    view->first = get_view_first_item(view, view->last);
-    view->selected = view->first;
-    */
 }
 
 void view_page_up(struct fm_view *view)
@@ -468,11 +424,6 @@ void view_page_up(struct fm_view *view)
         return;
     }
     set_view_by_last_item(view->first->prev, view);
-    /*
-    view->first = get_view_first_item(view, view->first->prev);
-    view->last = get_view_last_item(view, view->first);
-    view->selected = view->last;
-    */
 }
 
 void view_select_next(struct fm_view *view)

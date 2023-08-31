@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/errno.h>
+#include <errno.h>
 #include <sys/wait.h>
 #include <stdlib.h>
 
@@ -110,18 +110,13 @@ static void wait_ignoring_interrupts(int *stat_loc)
     }
 }
 
-static void str_trim(char *s)
+static void str_trim_right(char *s)
 {
-    char *p;
-    /* skip spaces at the begginig */
-    for (p = s; *p && *p == ' '; p++)
-        {}
-    /* copy sting to the beggining */
-    for (; *p && *p != ' '; p++) {
-        *s = *p;
-        s++;
-    }
-    *s = '\0';
+    int i;
+    for (i = strlen(s) - 1; i >= 0; i--)
+        if (s[i] != ' ')
+            break;
+    s[i + 1] = '\0';
 }
 
 static void run_program(const char *name, char* const *args, 
@@ -159,9 +154,9 @@ static void open_selected_file(struct lof_item *selection,
     char *args[3];
 
     prog_name = view_get_input(&fm->view, "Open file with");
-    if (!prog_name || prog_name[0] == ' ')
+    if (!prog_name)
         return;
-    str_trim(prog_name);
+    str_trim_right(prog_name);
 
     args[0] = prog_name;
     args[1] = selection->data.name;
@@ -213,9 +208,9 @@ static void fm_create_file(struct file_manager *fm)
     int fd;
 
     file_name = view_get_input(&fm->view, "Enter file name");
-    if (!file_name || file_name[0] == ' ')
+    if (!file_name)
         return;
-    str_trim(file_name);
+    str_trim_right(file_name);
 
     fd = open(file_name, O_CREAT|O_WRONLY|O_TRUNC, 0666);
     if (fd == -1) {
@@ -234,9 +229,9 @@ static void fm_copy_file(struct lof_item *selection,
     char *copy_path;
 
     copy_path = view_get_input(&fm->view, "Enter copy destination");
-    if (!copy_path || copy_path[0] == ' ')
+    if (!copy_path)
         return;
-    str_trim(copy_path);
+    str_trim_right(copy_path);
 
     err = copy_file(&selection->data, copy_path);
     if (err == -1)
@@ -254,9 +249,9 @@ static void fm_move_file(struct lof_item *selection,
     char *new_path;
 
     new_path = view_get_input(&fm->view, "Enter new file path");
-    if (!new_path || new_path[0] == ' ')
+    if (!new_path)
         return;
-    str_trim(new_path);
+    str_trim_right(new_path);
 
     err = move_file(&selection->data, new_path);
     if (err == -1)
@@ -274,9 +269,9 @@ static void fm_rename_file(struct lof_item *selection,
     char *new_name;
 
     new_name = view_get_input(&fm->view, "Enter new file name");
-    if (!new_name || new_name[0] == ' ')
+    if (!new_name)
         return;
-    str_trim(new_name);
+    str_trim_right(new_name);
 
     err = rename_file(&selection->data, new_name);
     if (err == -1)
@@ -293,9 +288,9 @@ static void fm_create_dir(struct file_manager *fm)
     int res;
 
     dir_name = view_get_input(&fm->view, "Enter directory name");
-    if (!dir_name || dir_name[0] == ' ')
+    if (!dir_name)
         return;
-    str_trim(dir_name);
+    str_trim_right(dir_name);
 
     res = mkdir(dir_name, 0777);
     if (res == -1) {
@@ -314,7 +309,7 @@ static void fm_delete_file(struct lof_item *selection,
 
     view_show_message(&fm->view, delete_file_alert);
     key = getch();
-    if (key == 'n')
+    if (key != 'y')
         return;
 
     res = remove_file(&selection->data);
