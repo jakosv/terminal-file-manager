@@ -23,5 +23,6 @@ $ ./file-manager
 | <kbd>d</kbd>                                      | Remove File/Directory(if empty)               |
 | <kbd>с</kbd>                                      | Copy File               |
 | <kbd>m</kbd>                                      | Move File               |
+| <kbd>r</kbd>                                      | Rename File               |
 | <kbd>q</kbd>                                      | Quit               |
 
