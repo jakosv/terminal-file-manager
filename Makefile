@@ -1,6 +1,13 @@
 PROG = file-manager
 CFLAGS = -Wall -g
+
+OS = $(shell uname)
+ifeq ($(OS),Darwin)
+LDFLAGS = -lncurses -lform -lm
+else
 LDFLAGS = -lncursesw -lformw -lm
+endif
+
 OBJMODULES = file_manager.o fm_view.o file.o directory.o list_of_files.o
 
 .PHONY: clean
