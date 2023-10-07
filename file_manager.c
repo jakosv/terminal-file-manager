@@ -95,9 +95,9 @@ static void move_file_to_trash(const char *file_name)
 static void open_selected_dir(struct lof_item *selection,
                               struct file_manager *fm)
 {
-    if (fm->view.selected->data.type != ft_dir)
+    if (fm->view.selected->data->type != ft_dir)
         return;
-    fm_update(fm, selection->data.name);
+    fm_update(fm, selection->data->name);
 }
 
 static void wait_ignoring_interrupts(int *stat_loc)
@@ -159,7 +159,7 @@ static void open_selected_file(struct lof_item *selection,
     str_trim_right(prog_name);
 
     args[0] = prog_name;
-    args[1] = selection->data.name;
+    args[1] = selection->data->name;
     args[2] = NULL;
     run_program(prog_name, args, fm);
 
@@ -172,8 +172,8 @@ static void exec_selected_file(struct lof_item *selection,
     char *prog_name;
     char *args[2];
 
-    prog_name = malloc(sizeof(selection->data.name)+3);
-    strcpy(prog_name+2, selection->data.name);
+    prog_name = malloc(sizeof(selection->data->name)+3);
+    strcpy(prog_name+2, selection->data->name);
     prog_name[0] = '.';
     prog_name[1] = '/';
 
@@ -188,7 +188,7 @@ static void handle_selected_file(struct lof_item *selection,
                                  struct file_manager *fm)
 {
     enum file_type type;
-    type = selection->data.type;
+    type = selection->data->type;
     switch (type) {
         case ft_dir:
             open_selected_dir(selection, fm);
@@ -233,7 +233,7 @@ static void fm_copy_file(struct lof_item *selection,
         return;
     str_trim_right(copy_path);
 
-    err = copy_file(&selection->data, copy_path);
+    err = copy_file(selection->data, copy_path);
     if (err == -1)
         fm_error(copy_path, fm);
     else
@@ -253,7 +253,7 @@ static void fm_move_file(struct lof_item *selection,
         return;
     str_trim_right(new_path);
 
-    err = move_file(&selection->data, new_path);
+    err = move_file(selection->data, new_path);
     if (err == -1)
         fm_error(new_path, fm);
     else
@@ -273,7 +273,7 @@ static void fm_rename_file(struct lof_item *selection,
         return;
     str_trim_right(new_name);
 
-    err = rename_file(&selection->data, new_name);
+    err = rename_file(selection->data, new_name);
     if (err == -1)
         fm_error(new_name, fm);
     else
@@ -312,9 +312,9 @@ static void fm_delete_file(struct lof_item *selection,
     if (key != 'y')
         return;
 
-    res = remove_file(&selection->data);
+    res = remove_file(selection->data);
     if (res == -1)
-        fm_error(selection->data.name, fm);
+        fm_error(selection->data->name, fm);
     else
         fm_update(fm, NULL);
 }

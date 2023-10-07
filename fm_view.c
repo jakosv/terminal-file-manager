@@ -193,9 +193,9 @@ static void draw_item(WINDOW *win, struct lof_item *cur, int row,
 
     fname_width = get_file_name_max_width(max_width);
 
-    file_size_str(cur->data.size, size_str, fsize_width+1);
-    file_name = form_file_name(cur->data.name, cur->data.type, fname_width);
-    time_str = form_time_str(cur->data.mtime);
+    file_size_str(cur->data->size, size_str, fsize_width+1);
+    file_name = form_file_name(cur->data->name, cur->data->type, fname_width);
+    time_str = form_time_str(cur->data->mtime);
 
     draw_item_str(win, row, max_width, selected, 
                   file_name, size_str, time_str); 

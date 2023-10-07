@@ -4,7 +4,7 @@
 #include "file.h"
 
 struct lof_item {
-    struct file_info data;
+    struct file_info *data;
     struct lof_item *prev, *next;
 };
 
@@ -13,7 +13,7 @@ struct list_of_files {
 };
 
 void lof_init(struct list_of_files *lst);
-void lof_add(struct list_of_files *lst, const struct file_info *file);
+void lof_add(struct list_of_files *lst, struct file_info *file);
 void lof_free(struct list_of_files *lst);
 
 int lof_get_item_pos(struct lof_item *item, struct list_of_files *lst);
